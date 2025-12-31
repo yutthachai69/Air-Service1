@@ -226,7 +226,49 @@ exports.getOrderByTracking = async (req, res) => {
     }
 };
 
-// 6. ส่วนจัดการทะเบียนแอร์ (Equipment)
-exports.getEquipments = async (req, res) => {
-    res.json({ message: "รายการเครื่องแอร์ทั้งหมดในระบบ" });
+// 6. ดึงสถิติรายงาน
+exports.getReportStats = async (req, res) => {
+    try {
+        const stats = await Order.getReportStats();
+        const monthlyRevenue = await Order.getMonthlyRevenue();
+        const currentMonthRevenue = await Order.getCurrentMonthRevenue();
+
+        // แปลงเดือนเป็นชื่อเดือนภาษาไทย/อังกฤษ
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const formattedMonthlyRevenue = monthlyRevenue.reverse().map(item => {
+            const date = new Date(item.month + '-01');
+            return {
+                month: monthNames[date.getMonth()],
+                revenue: item.revenue
+            };
+        });
+
+        // ถ้ามีไม่ครบ 3 เดือน ให้เติม 0
+        while (formattedMonthlyRevenue.length < 3) {
+            const monthsAgo = 3 - formattedMonthlyRevenue.length;
+            const date = new Date();
+            date.setMonth(date.getMonth() - monthsAgo);
+            formattedMonthlyRevenue.unshift({
+                month: monthNames[date.getMonth()],
+                revenue: 0
+            });
+        }
+
+        res.json({
+            message: "ดึงสถิติรายงานสำเร็จ",
+            data: {
+                currentMonthRevenue: currentMonthRevenue,
+                totalCompleted: stats.total_completed,
+                jobDistribution: {
+                    cleaning: stats.cleaning_count,
+                    repair: stats.repair_count,
+                    other: stats.other_count
+                },
+                monthlyRevenue: formattedMonthlyRevenue
+            }
+        });
+    } catch (err) {
+        console.error('Error fetching report stats:', err);
+        res.status(500).json({ error: err.message });
+    }
 };

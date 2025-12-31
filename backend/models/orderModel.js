@@ -153,6 +153,66 @@ const Order = {
                 else resolve({ id, status });
             });
         });
+    },
+
+    // ดึงสถิติรายงาน
+    getReportStats: () => {
+        return new Promise((resolve, reject) => {
+            const sql = `
+                SELECT 
+                    COUNT(*) as total_completed,
+                    COALESCE(SUM(total_price), 0) as total_revenue,
+                    COUNT(CASE WHEN service_type = 'cleaning' THEN 1 END) as cleaning_count,
+                    COUNT(CASE WHEN service_type = 'not_cold' OR service_type = 'leaking' OR service_type = 'noise' THEN 1 END) as repair_count,
+                    COUNT(CASE WHEN service_type = 'other' THEN 1 END) as other_count
+                FROM service_orders
+                WHERE status = 'completed'
+            `;
+            
+            db.get(sql, [], (err, row) => {
+                if (err) reject(err);
+                else resolve(row || { total_completed: 0, total_revenue: 0, cleaning_count: 0, repair_count: 0, other_count: 0 });
+            });
+        });
+    },
+
+    // ดึงรายได้รายเดือน (3 เดือนล่าสุด)
+    getMonthlyRevenue: () => {
+        return new Promise((resolve, reject) => {
+            const sql = `
+                SELECT 
+                    strftime('%Y-%m', created_at) as month,
+                    COALESCE(SUM(total_price), 0) as revenue
+                FROM service_orders
+                WHERE status = 'completed'
+                    AND created_at >= datetime('now', '-3 months')
+                GROUP BY strftime('%Y-%m', created_at)
+                ORDER BY month DESC
+                LIMIT 3
+            `;
+            
+            db.all(sql, [], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+    },
+
+    // ดึงรายได้เดือนปัจจุบัน
+    getCurrentMonthRevenue: () => {
+        return new Promise((resolve, reject) => {
+            const sql = `
+                SELECT COALESCE(SUM(total_price), 0) as revenue
+                FROM service_orders
+                WHERE status = 'completed'
+                    AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+            `;
+            
+            db.get(sql, [], (err, row) => {
+                if (err) reject(err);
+                else resolve(row ? row.revenue : 0);
+            });
+        });
     }
 };
 

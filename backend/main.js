@@ -10,13 +10,18 @@ const equipmentRoutes = require('./routes/equipmentRoutes');
 const techRoutes = require('./routes/techRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const errorHandler = require('./middleware/errorHandler'); // นำเข้า Error Handler
+const { apiLimiter } = require('./middleware/rateLimiter'); // Rate Limiting
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // 2. Middleware พื้นฐาน
 app.use(cors());
-app.use(express.json());
+// ใช้ express.json() เฉพาะเมื่อ Content-Type เป็น application/json เท่านั้น (เพื่อไม่ให้ conflict กับ multer)
+app.use(express.json({ type: 'application/json' }));
+
+// Apply rate limiting to all API routes
+app.use('/api', apiLimiter);
 
 // เปิดให้เข้าถึงโฟลเดอร์รูปภาพ (http://localhost:5000/uploads/filename.jpg)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

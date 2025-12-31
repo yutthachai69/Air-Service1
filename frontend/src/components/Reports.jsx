@@ -1,8 +1,58 @@
-// แก้ไขการ Import สองบรรทัดแรกให้รวมกัน
+import { useState, useEffect } from 'react';
 import { BarChart, PieChart } from '@mui/x-charts';
 import { CurrencyDollarIcon, WrenchScrewdriverIcon, AcademicCapIcon } from '@heroicons/react/24/outline';
+import { orderService } from '../services/orderService';
+import { useSnackbar } from 'notistack';
 
 const Reports = () => {
+    const { enqueueSnackbar } = useSnackbar();
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        currentMonthRevenue: 0,
+        totalCompleted: 0,
+        jobDistribution: {
+            cleaning: 0,
+            repair: 0,
+            other: 0
+        },
+        monthlyRevenue: [
+            { month: 'Oct', revenue: 0 },
+            { month: 'Nov', revenue: 0 },
+            { month: 'Dec', revenue: 0 }
+        ]
+    });
+
+    useEffect(() => {
+        fetchReportStats();
+    }, []);
+
+    const fetchReportStats = async () => {
+        try {
+            setLoading(true);
+            const data = await orderService.getReportStats();
+            setStats(data);
+        } catch (err) {
+            console.error('Error fetching report stats:', err);
+            enqueueSnackbar('ไม่สามารถดึงข้อมูลรายงานได้', { variant: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // คำนวณความพึงพอใจ (mock data - อาจจะต้องเก็บใน database ในอนาคต)
+    const satisfaction = stats.totalCompleted > 0 ? 4.9 : 0;
+
+    // เตรียมข้อมูลสำหรับ Pie Chart
+    const pieData = [
+        { id: 0, value: stats.jobDistribution.cleaning, label: 'ล้างแอร์', color: '#2563eb' },
+        { id: 1, value: stats.jobDistribution.repair, label: 'ซ่อมแอร์', color: '#64748b' },
+        { id: 2, value: stats.jobDistribution.other, label: 'อื่นๆ', color: '#94a3b8' },
+    ].filter(item => item.value > 0); // กรองเฉพาะที่มีค่า
+
+    // เตรียมข้อมูลสำหรับ Bar Chart
+    const barChartMonths = stats.monthlyRevenue.map(item => item.month);
+    const barChartData = stats.monthlyRevenue.map(item => item.revenue);
+
     return (
         <div className="space-y-8 animate-fade-in">
             <h3 className="text-3xl font-black text-slate-800 italic uppercase tracking-tight">
@@ -17,7 +67,9 @@ const Reports = () => {
                     </div>
                     <div>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">รายได้เดือนนี้</p>
-                        <p className="text-2xl font-black text-slate-800">฿45,200</p>
+                        <p className="text-2xl font-black text-slate-800">
+                            {loading ? '...' : `฿${stats.currentMonthRevenue.toLocaleString('th-TH')}`}
+                        </p>
                     </div>
                 </div>
                 
@@ -27,7 +79,9 @@ const Reports = () => {
                     </div>
                     <div>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">งานที่สำเร็จ</p>
-                        <p className="text-2xl font-black text-slate-800">128 งาน</p>
+                        <p className="text-2xl font-black text-slate-800">
+                            {loading ? '...' : `${stats.totalCompleted} งาน`}
+                        </p>
                     </div>
                 </div>
 
@@ -37,7 +91,9 @@ const Reports = () => {
                     </div>
                     <div>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ความพึงพอใจ</p>
-                        <p className="text-2xl font-black text-slate-800">4.9 / 5.0</p>
+                        <p className="text-2xl font-black text-slate-800">
+                            {loading ? '...' : `${satisfaction} / 5.0`}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -49,12 +105,16 @@ const Reports = () => {
                         Revenue <span className="text-blue-600">Overview</span>
                     </h4>
                     <div className="h-[300px] w-full">
-                        <BarChart
-                            xAxis={[{ scaleType: 'band', data: ['Oct', 'Nov', 'Dec'] }]}
-                            series={[{ data: [35000, 42000, 45200], label: 'รายได้ (บาท)', color: '#2563eb' }]}
-                            borderRadius={10}
-                            margin={{ top: 20, bottom: 30, left: 60, right: 20 }}
-                        />
+                        {loading ? (
+                            <div className="flex items-center justify-center h-full text-slate-400">กำลังโหลดข้อมูล...</div>
+                        ) : (
+                            <BarChart
+                                xAxis={[{ scaleType: 'band', data: barChartMonths }]}
+                                series={[{ data: barChartData, label: 'รายได้ (บาท)', color: '#2563eb' }]}
+                                borderRadius={10}
+                                margin={{ top: 20, bottom: 30, left: 60, right: 20 }}
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -64,26 +124,28 @@ const Reports = () => {
                         Job <span className="text-blue-600">Distribution</span>
                     </h4>
                     <div className="h-[300px] w-full flex justify-center">
-                        <PieChart
-                            series={[{
-                                data: [
-                                    { id: 0, value: 70, label: 'ล้างแอร์', color: '#2563eb' },
-                                    { id: 1, value: 20, label: 'ซ่อมแอร์', color: '#64748b' },
-                                    { id: 2, value: 10, label: 'ติดตั้ง', color: '#94a3b8' },
-                                ],
-                                innerRadius: 80,
-                                outerRadius: 110,
-                                paddingAngle: 5,
-                                cornerRadius: 8,
-                            }]}
-                            slotProps={{
-                                legend: {
-                                    direction: 'row',
-                                    position: { vertical: 'bottom', horizontal: 'center' },
-                                    padding: 0,
-                                },
-                            }}
-                        />
+                        {loading ? (
+                            <div className="flex items-center justify-center h-full text-slate-400">กำลังโหลดข้อมูล...</div>
+                        ) : pieData.length === 0 ? (
+                            <div className="flex items-center justify-center h-full text-slate-400">ยังไม่มีข้อมูล</div>
+                        ) : (
+                            <PieChart
+                                series={[{
+                                    data: pieData,
+                                    innerRadius: 80,
+                                    outerRadius: 110,
+                                    paddingAngle: 5,
+                                    cornerRadius: 8,
+                                }]}
+                                slotProps={{
+                                    legend: {
+                                        direction: 'row',
+                                        position: { vertical: 'bottom', horizontal: 'center' },
+                                        padding: 0,
+                                    },
+                                }}
+                            />
+                        )}
                     </div>
                 </div>
             </div>

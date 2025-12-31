@@ -8,11 +8,13 @@ import {
     XMarkIcon
 } from '@heroicons/react/24/outline';
 import { useSnackbar } from 'notistack';
+import { useAuth } from '../context/AuthContext';
 import { equipmentService } from '../services/equipmentService';
 import { orderService } from '../services/orderService';
 
 const ServiceRequest = () => {
     const { enqueueSnackbar } = useSnackbar();
+    const { user } = useAuth();
     const fileInputRef = useRef(null);
     const [loading, setLoading] = useState(false);
     const [equipments, setEquipments] = useState([]);
@@ -21,13 +23,13 @@ const ServiceRequest = () => {
         service_type: 'cleaning',
         description: '',
         customer_name: '',
-        customer_phone: '',
-        owner_id: 1 // ต้องแก้ให้ดึงจาก user ที่ login
+        customer_phone: ''
     });
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [showPDPAModal, setShowPDPAModal] = useState(false);
     const [showImageSourceModal, setShowImageSourceModal] = useState(false);
+    const cameraInputRef = useRef(null);
 
     // ดึงรายการเครื่องแอร์
     useEffect(() => {
@@ -57,10 +59,11 @@ const ServiceRequest = () => {
         }
     };
 
-    // ฟังก์ชันสำหรับเปิด file picker หลังจากยินยอม PDPA แล้ว
+    // ฟังก์ชันสำหรับเปิด file picker หลังจากยินยอม PDPA แล้ว (ใช้สำหรับ PDPA flow เท่านั้น)
     const triggerFileInput = (captureMode = null) => {
         if (!fileInputRef.current) {
             console.error('File input ref is not available');
+            setIsFilePickerOpen(false);
             return;
         }
         
@@ -71,19 +74,24 @@ const ServiceRequest = () => {
             fileInputRef.current.removeAttribute('capture');
         }
         
-        // ใช้ setTimeout เพื่อให้แน่ใจว่า DOM update แล้ว และ modal ปิดแล้ว
-        setTimeout(() => {
+        // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า DOM update แล้ว
+        requestAnimationFrame(() => {
             if (fileInputRef.current) {
                 try {
-                    // Reset value เพื่อให้สามารถเลือกไฟล์เดิมได้อีกครั้ง
+                    setIsFilePickerOpen(true);
                     fileInputRef.current.value = '';
                     fileInputRef.current.click();
+                    // Reset flag หลังจาก file picker ถูกเรียก
+                    setTimeout(() => {
+                        setIsFilePickerOpen(false);
+                    }, 500);
                 } catch (error) {
                     console.error('Error triggering file input:', error);
                     enqueueSnackbar('ไม่สามารถเปิด file picker ได้', { variant: 'error' });
+                    setIsFilePickerOpen(false);
                 }
             }
-        }, 300);
+        });
     };
 
     // เมื่อคลิกที่ area เลือกรูปภาพ
@@ -107,35 +115,91 @@ const ServiceRequest = () => {
         setShowImageSourceModal(true);
     };
 
+    // ตรวจสอบว่าเป็น Mobile หรือไม่
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     // เปิด file picker สำหรับเลือกไฟล์
     const handleSelectFromFiles = (e) => {
-        if (e) {
-            e.preventDefault();
-            e.stopPropagation();
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (!fileInputRef.current) {
+            console.error('File input ref is not available');
+            return;
         }
-        // ปิด modal ก่อน
-        setShowImageSourceModal(false);
-        // เรียก triggerFileInput โดยตรง (จะใช้ setTimeout ภายใน)
-        triggerFileInput(null); // ไม่ใช้ camera
+        
+        const input = fileInputRef.current;
+        input.value = ''; // Clear previous selection
+        
+        // เรียก click() ทันทีใน event handler (สำคัญ: ต้องอยู่ใน event handler เพื่อให้ browser รู้ว่าเป็น user interaction)
+        // อย่าปิด modal ตรงนี้ ให้ browser เปิด dialog ก่อน แล้วไปปิด modal ตอนเลือกไฟล์แทน
+        try {
+            input.click();
+        } catch (error) {
+            console.error('Error triggering file input:', error);
+            enqueueSnackbar('ไม่สามารถเปิด file picker ได้', { variant: 'error' });
+            setShowImageSourceModal(false);
+        }
     };
 
     // เปิด camera สำหรับถ่ายรูป
     const handleTakePhoto = (e) => {
-        if (e) {
-            e.preventDefault();
-            e.stopPropagation();
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // PC ไม่ควรพยายามเปิด camera
+        if (!isMobile) {
+            enqueueSnackbar('อุปกรณ์นี้ไม่รองรับการถ่ายรูป กรุณาใช้โทรศัพท์หรือแท็บเล็ต', { variant: 'info' });
+            return;
         }
-        // ปิด modal ก่อน
-        setShowImageSourceModal(false);
-        // เรียก triggerFileInput โดยตรง (จะใช้ setTimeout ภายใน)
-        triggerFileInput('environment'); // environment = กล้องหลัง, user = กล้องหน้า
+        
+        if (!cameraInputRef.current) {
+            console.error('Camera input ref is not available');
+            return;
+        }
+        
+        const input = cameraInputRef.current;
+        input.value = ''; // Clear previous selection
+        
+        // เรียก click() ทันทีใน event handler (สำคัญ: ต้องอยู่ใน event handler เพื่อให้ browser รู้ว่าเป็น user interaction)
+        // อย่าปิด modal ตรงนี้ ให้ browser เปิด camera ก่อน แล้วไปปิด modal ตอนถ่ายรูปเสร็จแทน
+        try {
+            input.click();
+        } catch (error) {
+            console.error('Error triggering camera input:', error);
+            enqueueSnackbar('ไม่สามารถเปิด camera ได้', { variant: 'error' });
+            setShowImageSourceModal(false);
+        }
     };
 
-    // เมื่อเลือกไฟล์แล้ว
+    // เมื่อเลือกไฟล์แล้ว (สำหรับ file picker)
     const handleImageChange = (e) => {
         const file = e.target.files[0];
+        
+        // ปิด modal เมื่อเลือกไฟล์ (ไม่ว่าจะเลือกไฟล์หรือ cancel)
+        setShowImageSourceModal(false);
+        
         if (file) {
             // ตรวจสอบอีกครั้งว่ายินยอมแล้ว (ป้องกันกรณีที่ user เปลี่ยน file input โดยตรง)
+            if (!checkPDPAConsent()) {
+                e.target.value = ''; // Clear file input
+                setShowPDPAModal(true);
+                return;
+            }
+            
+            processImageFile(file);
+        }
+    };
+
+    // เมื่อเลือกไฟล์จาก camera แล้ว
+    const handleCameraChange = (e) => {
+        const file = e.target.files[0];
+        
+        // ปิด modal เมื่อถ่ายรูปเสร็จ (ไม่ว่าจะถ่ายรูปหรือ cancel)
+        setShowImageSourceModal(false);
+        
+        if (file) {
+            // ตรวจสอบอีกครั้งว่ายินยอมแล้ว
             if (!checkPDPAConsent()) {
                 e.target.value = ''; // Clear file input
                 setShowPDPAModal(true);
@@ -198,7 +262,8 @@ const ServiceRequest = () => {
             formDataToSend.append('service_type', formData.service_type);
             formDataToSend.append('description', formData.description);
             formDataToSend.append('equipment_id', parseInt(formData.equipment_id));
-            formDataToSend.append('owner_id', selectedEquip?.owner_id || 1);
+            // ใช้ owner_id จาก equipment ที่เลือก หรือ fallback เป็น null (backend จะจัดการ)
+            formDataToSend.append('owner_id', selectedEquip?.owner_id || null);
             
             // ถ้ามีรูปภาพ ให้เพิ่มเข้าไปใน FormData
             if (imageFile) {
@@ -215,8 +280,7 @@ const ServiceRequest = () => {
                 service_type: 'cleaning',
                 description: '',
                 customer_name: '',
-                customer_phone: '',
-                owner_id: 1
+                customer_phone: ''
             });
             setImageFile(null);
             setImagePreview(null);
@@ -229,6 +293,26 @@ const ServiceRequest = () => {
 
     return (
         <div className="max-w-2xl mx-auto animate-fade-in px-2 sm:px-0">
+            {/* File inputs วางนอก form เพื่อหลีกเลี่ยงปัญหา browser security */}
+            {/* ใช้ position: fixed และย้ายออกนอก viewport แต่ยังมีขนาด (ไม่ใช่ 0x0) เพื่อให้ browser ยอมรับ */}
+            <input 
+                ref={fileInputRef}
+                type="file" 
+                accept="image/*"
+                onChange={handleImageChange}
+                style={{ position: 'fixed', top: '-1000px', left: '-1000px', width: '1px', height: '1px', opacity: 0, pointerEvents: 'auto' }}
+                id="file-input"
+            />
+            <input 
+                ref={cameraInputRef}
+                type="file" 
+                accept="image/*"
+                capture="environment"
+                onChange={handleCameraChange}
+                style={{ position: 'fixed', top: '-1000px', left: '-1000px', width: '1px', height: '1px', opacity: 0, pointerEvents: 'auto' }}
+                id="camera-input"
+            />
+            
             <div className="bg-white rounded-2xl sm:rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
                 {/* Header */}
                 <div className="bg-slate-900 p-6 sm:p-8 text-white">
@@ -328,13 +412,7 @@ const ServiceRequest = () => {
                             onClick={handleImageAreaClick}
                             className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center text-slate-400 hover:text-blue-500 hover:border-blue-500 transition-all cursor-pointer min-h-[120px]"
                         >
-                            <input 
-                                ref={fileInputRef}
-                                type="file" 
-                                accept="image/*"
-                                onChange={handleImageChange}
-                                className="hidden"
-                            />
+                            {/* File inputs ถูกย้ายออกไปนอก form แล้ว (วางไว้ด้านบน) */}
                             {imagePreview ? (
                                 <div className="w-full">
                                     <img src={imagePreview} alt="Preview" className="w-full max-h-48 object-contain rounded-xl mb-2" />
@@ -346,6 +424,9 @@ const ServiceRequest = () => {
                                             setImagePreview(null);
                                             if (fileInputRef.current) {
                                                 fileInputRef.current.value = '';
+                                            }
+                                            if (cameraInputRef.current) {
+                                                cameraInputRef.current.value = '';
                                             }
                                         }}
                                         className="text-xs text-red-500 hover:text-red-700 font-bold"
@@ -376,15 +457,30 @@ const ServiceRequest = () => {
 
             {/* Modal เลือกวิธีการ (ถ่ายรูป หรือเลือกไฟล์) */}
             {showImageSourceModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={(e) => {
-                    if (e.target === e.currentTarget) {
-                        setShowImageSourceModal(false);
-                    }
-                }}>
-                    <div className="bg-white rounded-2xl sm:rounded-[2.5rem] p-6 sm:p-8 max-w-md w-full relative animate-fade-in">
+                <div 
+                    className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" 
+                    onClick={(e) => {
+                        // ป้องกันการปิด modal เมื่อคลิกที่เนื้อหา modal
+                        if (e.target === e.currentTarget) {
+                            setShowImageSourceModal(false);
+                        }
+                    }}
+                >
+                    <div 
+                        className="bg-white rounded-2xl sm:rounded-[2.5rem] p-6 sm:p-8 max-w-md w-full relative animate-fade-in"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                        }}
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                        }}
+                    >
                         <button 
                             type="button"
-                            onClick={() => setShowImageSourceModal(false)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowImageSourceModal(false);
+                            }}
                             className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
                         >
                             <XMarkIcon className="w-6 h-6" />

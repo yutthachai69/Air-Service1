@@ -14,11 +14,8 @@ export const orderService = {
     // สร้าง order ใหม่ (สำหรับ Tenant)
     createOrder: async (orderData) => {
         // orderData สามารถเป็น FormData หรือ plain object
-        const config = orderData instanceof FormData 
-            ? { headers: { 'Content-Type': 'multipart/form-data' } }
-            : {};
-        
-        const response = await api.post('/orders', orderData, config);
+        // ไม่ต้อง set Content-Type header เพราะ axios interceptor จะจัดการให้ (ลบออกเพื่อให้ browser set boundary ให้อัตโนมัติ)
+        const response = await api.post('/orders', orderData);
         return response.data;
     },
 
@@ -46,6 +43,12 @@ export const orderService = {
     getOrderByTracking: async (trackingNo) => {
         const response = await api.get(`/orders/track/${trackingNo}`);
         return response.data;
+    },
+
+    // ดึงสถิติรายงาน
+    getReportStats: async () => {
+        const response = await api.get('/orders/stats/reports');
+        return response.data.data;
     }
 };
 

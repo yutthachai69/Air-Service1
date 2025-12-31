@@ -12,6 +12,9 @@ const ServiceOrders = () => {
     const [technicians, setTechnicians] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAssignModal, setShowAssignModal] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [showImageFullscreen, setShowImageFullscreen] = useState(false);
+    const [fullscreenImageUrl, setFullscreenImageUrl] = useState('');
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [selectedTech, setSelectedTech] = useState('');
     const userRole = role || '';
@@ -21,7 +24,7 @@ const ServiceOrders = () => {
         if (userRole === 'admin' || userRole === 'owner') {
             fetchTechnicians();
         }
-    }, []);
+    }, [userRole]);
 
     const fetchOrders = async () => {
         try {
@@ -103,6 +106,26 @@ const ServiceOrders = () => {
         setShowAssignModal(true);
     };
 
+    const openDetailsModal = (order) => {
+        setSelectedOrder(order);
+        setShowDetailsModal(true);
+    };
+
+    const closeDetailsModal = () => {
+        setSelectedOrder(null);
+        setShowDetailsModal(false);
+    };
+
+    const openImageFullscreen = (imageUrl) => {
+        setFullscreenImageUrl(imageUrl);
+        setShowImageFullscreen(true);
+    };
+
+    const closeImageFullscreen = () => {
+        setShowImageFullscreen(false);
+        setFullscreenImageUrl('');
+    };
+
     // Filter orders สำหรับ Owner: แสดงเฉพาะงานที่รออนุมัติ
     const displayOrders = (userRole === 'owner') 
         ? orders.filter(order => order.status === 'pending_owner')
@@ -130,7 +153,11 @@ const ServiceOrders = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {displayOrders.map((order) => (
-                        <div key={order.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+                        <div 
+                            key={order.id} 
+                            className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all relative overflow-hidden group cursor-pointer"
+                            onClick={() => openDetailsModal(order)}
+                        >
                             <div className="absolute top-0 right-0 w-2 h-full bg-blue-500"></div>
                             
                             <div className="flex justify-between items-start mb-4">
@@ -172,7 +199,10 @@ const ServiceOrders = () => {
                             {/* ปุ่มสำหรับ Owner: Assign Technician */}
                             {(userRole === 'owner' || userRole === 'admin') && order.status === 'pending_owner' && (
                                 <button
-                                    onClick={() => openAssignModal(order)}
+                                    onClick={(e) => {
+                                        e.stopPropagation(); // ป้องกันไม่ให้เปิด detail modal
+                                        openAssignModal(order);
+                                    }}
                                     className="w-full mt-4 bg-blue-600 text-white py-2 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
                                 >
                                     <UserPlusIcon className="w-4 h-4" />
@@ -181,6 +211,188 @@ const ServiceOrders = () => {
                             )}
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* Modal สำหรับแสดงรายละเอียดงาน */}
+            {showDetailsModal && selectedOrder && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeDetailsModal}>
+                    <div 
+                        className="bg-white rounded-[2.5rem] p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button 
+                            onClick={closeDetailsModal}
+                            className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 z-10"
+                        >
+                            <XMarkIcon className="w-6 h-6" />
+                        </button>
+                        
+                        <div className="space-y-6">
+                            {/* Header */}
+                            <div>
+                                <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2">
+                                    {selectedOrder.tracking_no || `JOB-${selectedOrder.id}`}
+                                </p>
+                                <h3 className="text-2xl font-black text-slate-800 mb-2">
+                                    {selectedOrder.service_type || selectedOrder.description || 'ไม่ระบุรายละเอียด'}
+                                </h3>
+                                <span className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase ${getStatusColor(selectedOrder.status)}`}>
+                                    {getStatusText(selectedOrder.status)}
+                                </span>
+                            </div>
+
+                            {/* ข้อมูลเครื่องแอร์ */}
+                            {(selectedOrder.brand || selectedOrder.model || selectedOrder.room_number) && (
+                                <div className="border-t border-slate-100 pt-6">
+                                    <h4 className="text-sm font-bold text-slate-500 uppercase mb-4">ข้อมูลเครื่องแอร์</h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {selectedOrder.brand && (
+                                            <div>
+                                                <p className="text-xs text-slate-400 mb-1">ยี่ห้อ</p>
+                                                <p className="text-base font-bold text-slate-800">{selectedOrder.brand} {selectedOrder.model || ''}</p>
+                                            </div>
+                                        )}
+                                        {selectedOrder.room_number && (
+                                            <div>
+                                                <p className="text-xs text-slate-400 mb-1">ห้อง</p>
+                                                <p className="text-base font-bold text-slate-800">{selectedOrder.room_number}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ข้อมูลลูกค้า */}
+                            <div className="border-t border-slate-100 pt-6">
+                                <h4 className="text-sm font-bold text-slate-500 uppercase mb-4">ข้อมูลลูกค้า</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-xs text-slate-400 mb-1">ชื่อลูกค้า</p>
+                                        <p className="text-base font-bold text-slate-800">{selectedOrder.customer_name || '-'}</p>
+                                    </div>
+                                    {selectedOrder.customer_phone && (
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-1">เบอร์โทร</p>
+                                            <p className="text-base font-bold text-slate-800">{selectedOrder.customer_phone}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* รูปภาพที่ลูกค้าส่งมา */}
+                            {selectedOrder.tenant_img && (
+                                <div className="border-t border-slate-100 pt-6">
+                                    <h4 className="text-sm font-bold text-slate-500 uppercase mb-4">รูปภาพที่ส่งมา</h4>
+                                    <img 
+                                        src={`http://localhost:5000${selectedOrder.tenant_img}`} 
+                                        alt="รูปที่ลูกค้าส่งมา" 
+                                        className="w-full h-64 object-contain rounded-2xl cursor-pointer hover:opacity-90 transition-opacity border border-slate-200 bg-slate-50"
+                                        onClick={() => openImageFullscreen(`http://localhost:5000${selectedOrder.tenant_img}`)}
+                                    />
+                                    <p className="text-xs text-slate-400 mt-2 text-center">คลิกเพื่อดูรูปภาพแบบเต็มหน้าจอ</p>
+                                </div>
+                            )}
+
+                            {/* รายละเอียดเพิ่มเติม */}
+                            {selectedOrder.description && (
+                                <div className="border-t border-slate-100 pt-6">
+                                    <h4 className="text-sm font-bold text-slate-500 uppercase mb-4">รายละเอียดเพิ่มเติม</h4>
+                                    <p className="text-base text-slate-700 whitespace-pre-wrap">{selectedOrder.description}</p>
+                                </div>
+                            )}
+
+                            {/* รออะไหล่ - แสดงข้อมูล spare part */}
+                            {selectedOrder.status === 'waiting_spare' && selectedOrder.spare_part_name && (
+                                <div className="border-t border-slate-100 pt-6">
+                                    <h4 className="text-sm font-bold text-slate-500 uppercase mb-4">ข้อมูลอะไหล่</h4>
+                                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <span className="text-2xl">⏳</span>
+                                            <div>
+                                                <p className="text-sm font-bold text-orange-800">รออะไหล่: {selectedOrder.spare_part_name}</p>
+                                                {selectedOrder.spare_part_eta && (
+                                                    <p className="text-xs text-orange-600 mt-1">
+                                                        คาดว่าจะได้รับ: {new Date(selectedOrder.spare_part_eta).toLocaleDateString('th-TH', { 
+                                                            dateStyle: 'long' 
+                                                        })}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ยกเลิก - แสดงเหตุผล */}
+                            {selectedOrder.status === 'cancelled' && selectedOrder.cancellation_reason && (
+                                <div className="border-t border-slate-100 pt-6">
+                                    <h4 className="text-sm font-bold text-slate-500 uppercase mb-4">เหตุผลที่ยกเลิก</h4>
+                                    <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                                        <p className="text-base text-red-800 whitespace-pre-wrap">{selectedOrder.cancellation_reason}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ข้อมูลสถานะและราคา */}
+                            <div className="border-t border-slate-100 pt-6">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-xs text-slate-400 mb-1">วันที่สร้าง</p>
+                                        <p className="text-base font-bold text-slate-800">
+                                            {selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleDateString('th-TH', { 
+                                                dateStyle: 'long' 
+                                            }) : '-'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-400 mb-1">ราคา</p>
+                                        <p className="text-base font-bold text-slate-800">
+                                            {selectedOrder.total_price ? `฿${selectedOrder.total_price.toLocaleString()}` : 'รอราคา'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ปุ่มสำหรับ Owner: Assign Technician (แสดงใน modal) */}
+                            {(userRole === 'owner' || userRole === 'admin') && selectedOrder.status === 'pending_owner' && (
+                                <div className="border-t border-slate-100 pt-6">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            closeDetailsModal();
+                                            openAssignModal(selectedOrder);
+                                        }}
+                                        className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <UserPlusIcon className="w-5 h-5" />
+                                        มอบหมายช่าง
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal สำหรับแสดงรูปภาพแบบเต็มหน้าจอ */}
+            {showImageFullscreen && fullscreenImageUrl && (
+                <div 
+                    className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4"
+                    onClick={closeImageFullscreen}
+                >
+                    <button 
+                        onClick={closeImageFullscreen}
+                        className="absolute top-4 right-4 text-white hover:text-gray-300 z-10 bg-black/50 rounded-full p-2"
+                    >
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                    <img 
+                        src={fullscreenImageUrl} 
+                        alt="รูปภาพเต็มหน้าจอ" 
+                        className="max-w-full max-h-full object-contain"
+                        onClick={(e) => e.stopPropagation()}
+                    />
                 </div>
             )}
 

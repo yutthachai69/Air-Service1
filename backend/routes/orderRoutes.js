@@ -24,5 +24,6 @@ router.post('/', verifyToken, upload.single('tenant_img'), orderController.creat
 router.patch('/:id/status', verifyToken, isTechnician, orderController.updateStatus);
 router.patch('/:id/assign', verifyToken, isOwner, orderController.assignTechnician);
 router.get('/track/:trackingNo', verifyToken, orderController.getOrderByTracking);
+router.get('/stats/reports', verifyToken, orderController.getReportStats);
 
 module.exports = router;

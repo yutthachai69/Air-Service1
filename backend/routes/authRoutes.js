@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const { verifyToken } = require('../middleware/authMiddleware');
+const { authLimiter } = require('../middleware/rateLimiter');
 
 // Authentication Routes
-router.post('/login', authController.login);
+router.post('/login', authLimiter, authController.login);
 
 // Users Resource (RESTful API)
 // GET    /api/auth/users          - ดึงข้อมูลผู้ใช้ทั้งหมด
